@@ -7,12 +7,42 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
 
     document.addEventListener('DOMContentLoaded', function() {
       let options = {
+        defaultDate: new Date(),
+        setDefaultDate: true,
         autoClose: true,
         onSelect: date => {
-          console.log(
-            `${date.getMonth()}/${date.getDate()}/${date.getFullYear()}`
-          );
-          console.log(document.querySelector('.datepicker').value);
+          // Clear edit state / set initial state
+          UICtrl.clearEditState();
+
+          // Remove existing list items from UI
+          UICtrl.removeItems();
+
+          // Get selected calendar date in proper format
+          let dateStr = date
+            .toDateString()
+            .split(' ')
+            .slice(1);
+          dateStr = `${dateStr[0]} ${dateStr[1]}, ${dateStr[2]}`;
+
+          // Fetch items from data structure
+          // If not date object is available for the passed in date
+          // a new date object will be created
+          const items = ItemCtrl.getItems(dateStr);
+
+          // Check if any items in date object
+          if (items.length === 0) {
+            UICtrl.hideList();
+          } else {
+            UICtrl.showList();
+            // Populate list with items
+            UICtrl.populateItemList(items);
+          }
+
+          // Get total calories
+          const totalCalories = ItemCtrl.getTotalCalories(dateStr);
+
+          // Add total calories to UI
+          UICtrl.showTotalCalories(totalCalories);
         }
       };
       var elems = document.querySelector('.datepicker');
@@ -64,21 +94,22 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
     const input = UICtrl.getItemInput();
 
     // Check for name and calorie input
-    if (input.name !== '' && input.calories !== '') {
+    if (input.name !== '' && input.calories !== '' && input.date !== '') {
       // Add item
-      const newItem = ItemCtrl.addItem(input.name, input.calories);
+      const newItem = ItemCtrl.addItem(input.date, input.name, input.calories);
 
       // Add item to UI list
       UICtrl.addListItem(newItem);
 
       // Get total calories
-      const totalCalories = ItemCtrl.getTotalCalories();
+      const totalCalories = ItemCtrl.getTotalCalories(input.date);
 
       // Add total calories to UI
       UICtrl.showTotalCalories(totalCalories);
 
       // Store in localStorage
-      StorageCtrl.storeItem(newItem);
+      // Pass in new object with add property of date
+      StorageCtrl.storeItem({ date: input.date, ...newItem });
 
       // Clear input fields
       UICtrl.clearInput();
@@ -90,6 +121,9 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
   // Click edit item
   const itemEditClick = e => {
     if (e.target.classList.contains('edit-item')) {
+      // Get form input from UI Controller
+      const input = UICtrl.getItemInput();
+
       // Get list item id (item-0, item-1)
       const listId = e.target.parentNode.parentNode.id;
 
@@ -100,13 +134,13 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
       const id = parseInt(listIdArr[1]);
 
       // Get item
-      const itemToEdit = ItemCtrl.getItemById(id);
+      const itemToEdit = ItemCtrl.getItemById(input.date, id);
 
       // Set current item
-      ItemCtrl.setCurrentItem(itemToEdit);
+      ItemCtrl.setCurrentItem(input.date, itemToEdit);
 
       // Add item to form
-      UICtrl.addItemToForm();
+      UICtrl.addItemToForm(input.date);
     }
     e.preventDefault();
   };
@@ -117,21 +151,25 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
     const input = UICtrl.getItemInput();
 
     // Check for name and calorie input
-    if (input.name !== '' && input.calories !== '') {
+    if (input.name !== '' && input.calories !== '' && input.date !== '') {
       // Update item
-      const updatedItem = ItemCtrl.updateItem(input.name, input.calories);
+      const updatedItem = ItemCtrl.updateItem(
+        input.date,
+        input.name,
+        input.calories
+      );
 
       // Update UI
       UICtrl.updateListItem(updatedItem);
 
       // Get total calories
-      const totalCalories = ItemCtrl.getTotalCalories();
+      const totalCalories = ItemCtrl.getTotalCalories(input.date);
 
       // Add total calories to UI
       UICtrl.showTotalCalories(totalCalories);
 
-      // Update local storage
-      StorageCtrl.updateItemStorage(updatedItem);
+      // Update local storage, pass in item object with date added
+      StorageCtrl.updateItemStorage({ date: input.date, ...updatedItem });
 
       UICtrl.clearEditState();
     }
@@ -140,23 +178,26 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
   };
 
   const itemDeleteSubmit = e => {
+    // Get form input from UI Controller
+    const input = UICtrl.getItemInput();
+
     // Get current item
-    const currentItem = ItemCtrl.getCurrentItem();
+    const currentItem = ItemCtrl.getCurrentItem(input.date);
 
     // Delete from data structure
-    ItemCtrl.deleteItem(currentItem.id);
+    ItemCtrl.deleteItem(input.date, currentItem.id);
 
     // Delete from UI
     UICtrl.deleteListItem(currentItem.id);
 
     // Get total calories
-    const totalCalories = ItemCtrl.getTotalCalories();
+    const totalCalories = ItemCtrl.getTotalCalories(input.date);
 
     // Add total calories to UI
     UICtrl.showTotalCalories(totalCalories);
 
     // Delete item from local storage
-    StorageCtrl.deleteItemFromStorage(currentItem.id);
+    StorageCtrl.deleteItemFromStorage(input.date, currentItem.id);
 
     UICtrl.clearEditState();
 
@@ -165,11 +206,14 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
 
   // Clear items event
   const clearAllItemsClick = e => {
+    // Get form input from UI Controller
+    const input = UICtrl.getItemInput();
+
     // Delete all items from data structure
-    ItemCtrl.clearAllItems();
+    ItemCtrl.clearAllItems(input.date);
 
     // Get total calories
-    const totalCalories = ItemCtrl.getTotalCalories();
+    const totalCalories = ItemCtrl.getTotalCalories(input.date);
 
     // Add total calories to UI
     UICtrl.showTotalCalories(totalCalories);
@@ -178,7 +222,7 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
     UICtrl.removeItems();
 
     // Clear from local storage
-    StorageCtrl.clearItemsFromStorage();
+    StorageCtrl.clearItemsFromStorage(input.date);
 
     // Hide UL
     UICtrl.hideList();
@@ -198,10 +242,19 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
       // Clear edit state / set initial state
       UICtrl.clearEditState();
 
-      // Fetch items from data structure
-      const items = ItemCtrl.getItems();
+      // Get current date in proper format
+      let dateStr = new Date()
+        .toDateString()
+        .split(' ')
+        .slice(1);
+      dateStr = `${dateStr[0]} ${dateStr[1]}, ${dateStr[2]}`;
 
-      // Check if any items
+      // Fetch items from data structure
+      // If not date object is available for the passed in date
+      // a new date object will be created
+      const items = ItemCtrl.getItems(dateStr);
+
+      // Check if any items in date object
       if (items.length === 0) {
         UICtrl.hideList();
       } else {
@@ -210,7 +263,7 @@ const App = ((ItemCtrl, StorageCtrl, UICtrl) => {
       }
 
       // Get total calories
-      const totalCalories = ItemCtrl.getTotalCalories();
+      const totalCalories = ItemCtrl.getTotalCalories(dateStr);
 
       // Add total calories to UI
       UICtrl.showTotalCalories(totalCalories);
